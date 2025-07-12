@@ -36,9 +36,67 @@ interface AdminPortalProps {
   onBack: () => void;
 }
 
+
 const AdminPortal: React.FC<AdminPortalProps> = ({ onBack }) => {
   const [filterDate, setFilterDate] = useState('');
   const [filterStore, setFilterStore] = useState('');
+
+  // Predictive Analytics state
+  const [prediction, setPrediction] = useState<string | null>(null);
+  const [predicting, setPredicting] = useState(false);
+
+  // Simulate API call for prediction (replace with real backend call)
+const GEMINI_API_KEY = "GEMINI API KEY"; // Your Gemini API key
+
+const [inventoryData, setInventoryData] = useState<any[]>([]);
+
+const fetchInventoryPrediction = async () => {
+  setPredicting(true);
+  setPrediction(null);
+  setInventoryData([]);
+  try {
+    // Step 1: Fetch inventory data from backend
+    const response = await fetch("http://localhost:4000/api/predict-inventory");
+    const data = await response.json();
+
+    if (data.prediction && Array.isArray(data.prediction) && data.prediction.length > 0) {
+      setInventoryData(data.prediction); // Save inventory data for display
+
+      // Step 2: Prepare a more explicit prompt for Gemini
+      const inventoryList = data.prediction
+        .map((item, idx) => `${idx + 1}. ${item.category}: ${item.units} units`)
+        .join("\n");
+      const prompt = `You are an inventory forecasting AI.\nHere is the current inventory by category:\n${inventoryList}\n\nBased on this data, predict the inventory needs for next month for each category.\nPlease provide your answer as a numbered list, with each category and the predicted number of units. If you need to make assumptions, state them briefly before the list.`;
+
+      // Step 3: Call Gemini API
+      const geminiResponse = await fetch(
+        `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${GEMINI_API_KEY}`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            contents: [
+              {
+                role: "user",
+                parts: [{ text: prompt }]
+              }
+            ]
+          })
+        }
+      );
+      const geminiData = await geminiResponse.json();
+      const aiText =
+        geminiData.candidates?.[0]?.content?.parts?.[0]?.text ||
+        "No prediction from AI.";
+      setPrediction(aiText);
+    } else {
+      setPrediction("No inventory data available.");
+    }
+  } catch (error) {
+    setPrediction("Error fetching prediction.");
+  }
+  setPredicting(false);
+};
 
   const handleDownloadReport = (type: string) => {
     toast({
@@ -190,6 +248,41 @@ const AdminPortal: React.FC<AdminPortalProps> = ({ onBack }) => {
                       <p className="text-sm">Real charts will be integrated with Recharts</p>
                     </div>
                   </div>
+                </CardContent>
+              </Card>
+
+              {/* Predictive Analytics Card */}
+              <Card className="bg-white/5 backdrop-blur-xl border-white/10">
+                <CardHeader>
+                  <CardTitle className="text-white flex items-center">
+                    <TrendingUp className="w-5 h-5 mr-2 text-green-400" />
+                    Inventory Prediction (AI)
+                  </CardTitle>
+                  <CardDescription className="text-slate-300">
+                    Forecast inventory needs for next month using AI
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <Button onClick={fetchInventoryPrediction} disabled={predicting} className="bg-green-500/20 hover:bg-green-500/30 text-green-300 border border-green-500/30">
+                    {predicting ? "Predicting..." : "Get Inventory Prediction"}
+                  </Button>
+                  {inventoryData.length > 0 && (
+                    <div className="mb-4 p-4 rounded-lg bg-blue-500/10 border border-blue-500/20 text-white">
+                      <div className="font-bold mb-2">Current Inventory by Category:</div>
+                      <ul>
+                        {inventoryData.map((item, idx) => (
+                          <li key={idx}>
+                            {item.category}: {item.units} units
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+                  {prediction && (
+                    <div className="p-4 rounded-lg bg-green-500/10 border border-green-500/20 whitespace-pre-line text-white">
+                      {prediction}
+                    </div>
+                  )}
                 </CardContent>
               </Card>
 
