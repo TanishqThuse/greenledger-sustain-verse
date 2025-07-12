@@ -8,6 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
+import axios from "axios";
 import { 
   ArrowLeft, 
   Plus, 
@@ -35,14 +36,56 @@ const ClientPortal: React.FC<ClientPortalProps> = ({ onBack }) => {
     reason: ''
   });
 
-  const handleWasteSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
+  const [aiRecommendation, setAiRecommendation] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
+
+
+// Add this constant above the function
+const GEMINI_API_KEY = "GEMINI API KEY"; // Replace with your actual key
+
+const handleWasteSubmit = async (e: React.FormEvent) => {
+  e.preventDefault();
+  setLoading(true);
+  setAiRecommendation(null);
+
+  // Build a prompt for the AI
+  const prompt = `Suggest the best action for the following waste event:\n
+    Product: ${wasteForm.product}
+    Quantity: ${wasteForm.quantity}
+    Category: ${wasteForm.category}
+    Reason: ${wasteForm.reason}
+    `;
+
+  try {
+    const response = await axios.post(
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${GEMINI_API_KEY}`,
+      {
+        contents: [
+          {
+            role: "user",
+            parts: [{ text: prompt }]
+          }
+        ]
+      }
+    );
+    const aiMessage = response.data.candidates?.[0]?.content?.parts?.[0]?.text || "No response";
+    setAiRecommendation(aiMessage);
     toast({
       title: "Waste Event Logged",
       description: "AI recommendation generated successfully!",
     });
+  } catch (error) {
+    setAiRecommendation("Error: Unable to get AI recommendation.");
+    toast({
+      title: "Error",
+      description: "Failed to get AI recommendation.",
+      variant: "destructive"
+    });
+  } finally {
+    setLoading(false);
     setWasteForm({ product: '', quantity: '', category: '', reason: '' });
-  };
+  }
+};
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-900 via-emerald-900 to-teal-900">
@@ -174,58 +217,22 @@ const ClientPortal: React.FC<ClientPortalProps> = ({ onBack }) => {
               </Card>
 
               {/* AI Recommendations */}
-              <Card className="bg-white/5 backdrop-blur-xl border-white/10">
-                <CardHeader>
-                  <CardTitle className="text-white flex items-center">
-                    <Brain className="w-5 h-5 mr-2 text-blue-400" />
-                    AI Recommendations
-                  </CardTitle>
-                  <CardDescription className="text-slate-300">
-                    Smart suggestions based on your waste data
-                  </CardDescription>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                  <div className="space-y-3">
-                    <div className="p-4 rounded-lg bg-emerald-500/10 border border-emerald-500/20">
-                      <div className="flex items-center justify-between mb-2">
-                        <span className="text-emerald-300 font-medium">Recommended Action</span>
-                        <Badge className="bg-emerald-500/20 text-emerald-300">AI Suggestion</Badge>
-                      </div>
-                      <p className="text-white">Donate to local food bank within 24 hours</p>
-                      <p className="text-sm text-slate-300 mt-1">Confidence: 92%</p>
-                    </div>
-                    
-                    <div className="p-4 rounded-lg bg-blue-500/10 border border-blue-500/20">
-                      <div className="flex items-center justify-between mb-2">
-                        <span className="text-blue-300 font-medium">Alternative Option</span>
-                        <Badge className="bg-blue-500/20 text-blue-300">Secondary</Badge>
-                      </div>
-                      <p className="text-white">Apply 50% discount and sell immediately</p>
-                      <p className="text-sm text-slate-300 mt-1">Confidence: 78%</p>
-                    </div>
-                  </div>
+              <CardContent className="space-y-4">
+  {loading ? (
+    <div className="text-blue-400">Generating AI recommendation...</div>
+  ) : aiRecommendation ? (
+    <div className="p-4 rounded-lg bg-emerald-500/10 border border-emerald-500/20">
+      <div className="flex items-center justify-between mb-2">
+        <span className="text-emerald-300 font-medium">AI Recommendation</span>
+        <Badge className="bg-emerald-500/20 text-emerald-300">AI Suggestion</Badge>
+      </div>
+      <p className="text-white">{aiRecommendation}</p>
+    </div>
+  ) : (
+    <div className="text-slate-400">Submit a waste event to get an AI recommendation.</div>
+  )}
+</CardContent>
 
-                  <div className="pt-4 border-t border-white/10">
-                    <Label className="text-white">What action did you take?</Label>
-                    <Select>
-                      <SelectTrigger className="bg-white/10 border-white/20 text-white mt-2">
-                        <SelectValue placeholder="Select your action" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="donated">Donated to food bank</SelectItem>
-                        <SelectItem value="discounted">Applied discount</SelectItem>
-                        <SelectItem value="composted">Composted</SelectItem>
-                        <SelectItem value="returned">Returned to supplier</SelectItem>
-                        <SelectItem value="disposed">Disposed</SelectItem>
-                      </SelectContent>
-                    </Select>
-                    <Button className="w-full mt-3 bg-white/10 hover:bg-white/20 border border-white/20">
-                      <CheckCircle className="w-4 h-4 mr-2" />
-                      Confirm Action
-                    </Button>
-                  </div>
-                </CardContent>
-              </Card>
             </div>
           </TabsContent>
 
